@@ -8,4 +8,4 @@ backend/storage/
 backend/workspaces/
 front/.next/
 *.log
-
+.idea
