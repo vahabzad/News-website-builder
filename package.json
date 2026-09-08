@@ -1,0 +1,14 @@
+{
+  "name": "news-site-builder",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n FRONT,BACK -c cyan,magenta \"npm run dev --prefix front\" \"npm run dev --prefix backend\"",
+    "build": "npm run build --prefix backend && npm run build --prefix front",
+    "install:all": "npm install && npm install --prefix front && npm install --prefix backend",
+    "codex:login": "npm run codex:login --prefix backend",
+    "codex:status": "npm run codex:status --prefix backend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
