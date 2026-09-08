@@ -13,7 +13,7 @@ import multer from "multer";
 import { nanoid } from "nanoid";
 import slugify from "slugify";
 import { createToken, requireAuth, type AuthRequest } from "./auth.js";
-import { getLocalCodexStatus, queueGeneration } from "./generator.js";
+import { getLocalCodexStatus, queueGeneration, queuedProgress, recoverInterruptedJobs } from "./generator.js";
 import { projectPublicOutput, projectWorkspace, storageRoot, workspaceRoot } from "./paths.js";
 import { authSchema, continuationSchema, siteSpecSchema } from "./schemas.js";
 import { findProject, findUserByEmail, readDatabase, updateDatabase, updateProject } from "./store.js";
@@ -29,6 +29,7 @@ const continuationGloballyEnabled = process.env.ALLOW_CONTINUATION !== "false";
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 1 } });
 
 await Promise.all([mkdir(storageRoot, { recursive: true }), mkdir(workspaceRoot, { recursive: true })]);
+await recoverInterruptedJobs();
 
 app.disable("x-powered-by");
 app.use(helmet({
@@ -134,7 +135,16 @@ app.post("/api/projects/:id/logo", requireAuth, upload.single("logo"), async (re
 app.post("/api/projects/:id/generate", requireAuth, async (req: AuthRequest, res) => {
   const project = await ownedProject(req, res); if (!project) return;
   if (["queued", "generating", "building"].includes(project.status)) return res.status(409).json({ message: "این پروژه هم‌اکنون در حال ساخت است." });
-  await updateProject(project.id, { status: "queued", error: undefined }); queueGeneration(project.id); res.status(202).json({ queued: true });
+  const resumeInstruction = project.threadId
+    ? "اجرای قبلی این پروژه قطع شده است. کار را از وضعیت فعلی فایل‌ها ادامه بده، خطاهای باقی‌مانده را اصلاح کن و پروژه را کامل کن. فایل‌های سالم را بی‌دلیل بازنویسی نکن."
+    : undefined;
+  await updateProject(project.id, {
+    status: "queued",
+    error: undefined,
+    progress: queuedProgress(resumeInstruction ? "ادامه ساخت قبلی در صف اجرا قرار گرفت." : undefined),
+  });
+  queueGeneration(project.id, resumeInstruction);
+  res.status(202).json({ queued: true, resumed: Boolean(resumeInstruction) });
 });
 
 app.post("/api/projects/:id/continue", requireAuth, async (req: AuthRequest, res) => {
@@ -142,7 +152,7 @@ app.post("/api/projects/:id/continue", requireAuth, async (req: AuthRequest, res
   if (!continuationGloballyEnabled || !project.continuationEnabled) return res.status(403).json({ message: "امکان ادامه پروژه فعلاً غیرفعال است." });
   if (project.status !== "ready" || !project.threadId) return res.status(409).json({ message: "پروژه هنوز آماده ادامه نیست." });
   const parsed = continuationSchema.safeParse(req.body); if (!parsed.success) return res.status(400).json({ message: "دستور تغییر معتبر نیست." });
-  await updateProject(project.id, { status: "queued", error: undefined }); queueGeneration(project.id, parsed.data.instruction); res.status(202).json({ queued: true });
+  await updateProject(project.id, { status: "queued", error: undefined, progress: queuedProgress("درخواست ویرایش در صف اجرا قرار گرفت.") }); queueGeneration(project.id, parsed.data.instruction); res.status(202).json({ queued: true });
 });
 
 app.get("/api/projects/:id/download", requireAuth, async (req: AuthRequest, res) => {

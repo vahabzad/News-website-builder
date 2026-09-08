@@ -1,5 +1,21 @@
 export type BuildStatus = "draft" | "queued" | "generating" | "building" | "ready" | "failed";
 
+export interface BuildProgressEvent {
+  id: string;
+  at: string;
+  kind: "info" | "command" | "file" | "success" | "error";
+  message: string;
+}
+
+export interface BuildProgress {
+  stage: BuildStatus | "preparing" | "installing";
+  message: string;
+  model?: string;
+  startedAt: string;
+  lastActivityAt: string;
+  events: BuildProgressEvent[];
+}
+
 export interface User {
   id: string;
   email: string;
@@ -18,6 +34,7 @@ export interface Project {
   threadId?: string;
   finalResponse?: string;
   error?: string;
+  progress?: BuildProgress;
   version: number;
   createdAt: string;
   updatedAt: string;

@@ -2,7 +2,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import { nanoid } from "nanoid";
 import { dataRoot, databaseFile } from "./paths.js";
-import type { Database, Project, User } from "./types.js";
+import type { BuildProgress, Database, Project, User } from "./types.js";
 
 let writeChain = Promise.resolve();
 
@@ -59,6 +59,16 @@ export async function updateProject(projectId: string, patch: Partial<Project>):
     const project = db.projects.find((item) => item.id === projectId);
     if (!project) throw new Error("PROJECT_NOT_FOUND");
     Object.assign(project, patch, { updatedAt: new Date().toISOString() });
+    return structuredClone(project);
+  });
+}
+
+export async function updateProjectProgress(projectId: string, mutate: (progress: BuildProgress | undefined) => BuildProgress): Promise<Project> {
+  return updateDatabase((db) => {
+    const project = db.projects.find((item) => item.id === projectId);
+    if (!project) throw new Error("PROJECT_NOT_FOUND");
+    project.progress = mutate(project.progress);
+    project.updatedAt = new Date().toISOString();
     return structuredClone(project);
   });
 }
