@@ -173,13 +173,17 @@ async function validateGeneratedPackage(workspace: string) {
 async function buildGeneratedSite(projectId: string, workspace: string) {
   await reportProgress(projectId, "building", "در حال بررسی ساختار پروژه و وابستگی‌ها…");
   await validateGeneratedPackage(workspace);
-  const npm = process.platform === "win32" ? "npm.cmd" : "npm";
   await reportProgress(projectId, "installing", "در حال نصب وابستگی‌های پروژه…", "command");
-  await keepActivityFresh(projectId, execFileAsync(npm, ["install", "--ignore-scripts", "--no-audit", "--no-fund"], { cwd: workspace, timeout: 8 * 60_000, maxBuffer: 2_000_000 }));
+  const npmCommand = process.platform === "win32"
+    ? { file: process.execPath, args: [path.join(path.dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js")] }
+    : { file: "npm", args: [] as string[] };
+  await keepActivityFresh(projectId, execFileAsync(npmCommand.file, [...npmCommand.args, "install", "--ignore-scripts", "--no-audit", "--no-fund"], { cwd: workspace, timeout: 8 * 60_000, maxBuffer: 2_000_000 }));
   await reportProgress(projectId, "installing", "نصب وابستگی‌ها کامل شد.", "success");
-  const nextBinary = path.join(workspace, "node_modules", ".bin", process.platform === "win32" ? "next.cmd" : "next");
   await reportProgress(projectId, "building", "در حال ساخت خروجی نهایی Next.js…", "command");
-  await keepActivityFresh(projectId, execFileAsync(nextBinary, ["build", "--webpack"], { cwd: workspace, timeout: 8 * 60_000, maxBuffer: 3_000_000 }));
+  const nextCommand = process.platform === "win32"
+    ? { file: process.execPath, args: [path.join(workspace, "node_modules", "next", "dist", "bin", "next")] }
+    : { file: path.join(workspace, "node_modules", ".bin", "next"), args: [] as string[] };
+  await keepActivityFresh(projectId, execFileAsync(nextCommand.file, [...nextCommand.args, "build", "--webpack"], { cwd: workspace, timeout: 8 * 60_000, maxBuffer: 3_000_000 }));
   await reportProgress(projectId, "building", "ساخت خروجی Next.js با موفقیت تمام شد.", "success");
 }
 
