@@ -6,6 +6,7 @@ dist/
 backend/data/
 backend/storage/
 backend/workspaces/
+backend/workspaces
 front/.next/
 *.log
 .idea

@@ -116,6 +116,23 @@ app.post("/api/projects", requireAuth, async (req: AuthRequest, res) => {
   res.status(201).json(publicProject(project));
 });
 
+app.put("/api/projects/:id", requireAuth, async (req: AuthRequest, res) => {
+  const project = await ownedProject(req, res); if (!project) return;
+  if (["queued", "generating", "building"].includes(project.status)) return res.status(409).json({ message: "در زمان ساخت پروژه امکان ویرایش تنظیمات وجود ندارد." });
+  const parsed = siteSpecSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: "اطلاعات فرم کامل یا معتبر نیست.", issues: parsed.error.issues });
+  const existingLogo = typeof project.spec.uploadedLogo === "string" ? project.spec.uploadedLogo : undefined;
+  const spec = parsed.data.design.logo.mode === "provided" && existingLogo
+    ? { ...parsed.data, uploadedLogo: existingLogo }
+    : parsed.data;
+  const updated = await updateProject(project.id, {
+    name: parsed.data.siteName,
+    slug: slugify(parsed.data.siteName, { lower: true, strict: true }) || project.slug,
+    spec,
+  });
+  res.json(publicProject(updated));
+});
+
 app.get("/api/projects/:id", requireAuth, async (req: AuthRequest, res) => { const project = await ownedProject(req, res); if (project) res.json(publicProject(project)); });
 
 app.post("/api/projects/:id/logo", requireAuth, upload.single("logo"), async (req: AuthRequest, res) => {
@@ -145,6 +162,20 @@ app.post("/api/projects/:id/generate", requireAuth, async (req: AuthRequest, res
   });
   queueGeneration(project.id, resumeInstruction);
   res.status(202).json({ queued: true, resumed: Boolean(resumeInstruction) });
+});
+
+app.post("/api/projects/:id/rebuild", requireAuth, async (req: AuthRequest, res) => {
+  const project = await ownedProject(req, res); if (!project) return;
+  if (["queued", "generating", "building"].includes(project.status)) return res.status(409).json({ message: "این پروژه هم‌اکنون در حال ساخت است." });
+  await updateProject(project.id, {
+    status: "queued",
+    error: undefined,
+    threadId: undefined,
+    finalResponse: undefined,
+    progress: queuedProgress("ساخت مجدد پروژه با تنظیمات جدید در صف اجرا قرار گرفت."),
+  });
+  queueGeneration(project.id, undefined, true);
+  res.status(202).json({ queued: true, rebuilt: true });
 });
 
 app.post("/api/projects/:id/continue", requireAuth, async (req: AuthRequest, res) => {

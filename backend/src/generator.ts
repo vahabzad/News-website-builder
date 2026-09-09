@@ -266,7 +266,7 @@ function buildFailureDetails(error: unknown) {
   return details.slice(-6_000);
 }
 
-async function runJob(projectId: string, continuation?: string) {
+async function runJob(projectId: string, continuation?: string, rebuild = false) {
   if (activeJobs.has(projectId)) return;
   activeJobs.add(projectId);
   try {
@@ -332,7 +332,7 @@ async function runJob(projectId: string, continuation?: string) {
       }
     }
     await reportProgress(projectId, "ready", "پروژه با موفقیت آماده شد.", "success");
-    await updateProject(projectId, { status: "ready", version: continuation ? project.version + 1 : 1, error: undefined });
+    await updateProject(projectId, { status: "ready", version: continuation || rebuild ? project.version + 1 : 1, error: undefined });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await reportProgress(projectId, "failed", `فرایند متوقف شد: ${compact(message, 160)}`, "error").catch(() => undefined);
@@ -342,8 +342,8 @@ async function runJob(projectId: string, continuation?: string) {
   }
 }
 
-export function queueGeneration(projectId: string, continuation?: string) {
-  setImmediate(() => void runJob(projectId, continuation));
+export function queueGeneration(projectId: string, continuation?: string, rebuild = false) {
+  setImmediate(() => void runJob(projectId, continuation, rebuild));
 }
 
 export function isJobActive(projectId: string) {
